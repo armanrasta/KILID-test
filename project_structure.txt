@@ -1,0 +1,20 @@
+real-estate/
+├── docker-compose.yml
+├── Dockerfile
+├── requirements.txt
+├── src/
+│   ├── crawler/
+│   │   ├── __init__.py
+│   │   ├── spider.py
+│   │   └── middlewares.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── property.py
+│   ├── tasks/
+│   │   ├── __init__.py
+│   │   └── celery_tasks.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── main.py
+│   └── config.py
+└── README.md

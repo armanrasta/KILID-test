@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: username
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: real_estate
+    ports:
+      - "5432:5432"
+    networks:
+      - real_estate_network
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: always
+
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: rabbitmq_broker
+    environment:
+      - RABBITMQ_DEFAULT_USER=arman
+      - RABBITMQ_DEFAULT_PASS=arman
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - real_estate_network
+    restart: always
+
+  celery_worker:
+    image: celery:latest
+    container_name: celery_worker
+    depends_on:
+      - rabbitmq
+      - postgres
+    environment:
+      CELERY_BROKER_URL: amqp://arman:arman@rabbitmq_broker:5672/
+      CELERY_RESULT_BACKEND: db+postgresql://username:password@postgres_db:5432/real_estate
+    networks:
+      - real_estate_network
+    restart: always
+
+networks:
+  real_estate_network:
+    driver: bridge
+
+volumes:
+  db_data:
