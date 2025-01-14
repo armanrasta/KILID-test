@@ -1,27 +1,38 @@
+import uvicorn
 from fastapi import FastAPI
-from sqlalchemy import create_engine, func
-from ..models.property import Property
+from fastapi.middleware.cors import CORSMiddleware
+from src.api.routers import analysis
+from src.api.middleware.error_handler import catch_exceptions_middleware
+from src.api.config import settings
 
-app = FastAPI()
-engine = create_engine('postgresql://username:password@postgres_db:5432/real_estate')
+app = FastAPI(
+    title=settings.app_name,
+    description="API for real estate property analysis",
+)
 
-@app.get("/analytics/regions")
-async def get_region_analytics():
-    with engine.connect() as conn:
-        # Count listings by region
-        region_counts = conn.execute(
-            func.count(Property.id).label('count'),
-            func.groupby(Property.region)
-        ).all()
-        
-        # Count TruCheck listings by region
-        trucheck_counts = conn.execute(
-            func.count(Property.id).label('count'),
-            func.groupby(Property.region),
-            Property.tru_check == True
-        ).all()
-        
-        return {
-            "region_counts": region_counts,
-            "trucheck_counts": trucheck_counts
-        }
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.middleware("http")(catch_exceptions_middleware)
+
+app.include_router(analysis.router)
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to Real Estate Analysis API"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "src.api.main:app",
+        host="127.0.0.1",
+        port=8000,
+        reload=True
+    )

@@ -10,3 +10,5 @@ build/
 .idea/
 *.log
 .DS_Store
+alembic.ini
+migrations/

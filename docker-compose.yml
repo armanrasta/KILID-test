@@ -29,19 +29,6 @@ services:
       - real_estate_network
     restart: always
 
-  celery_worker:
-    image: celery:latest
-    container_name: celery_worker
-    depends_on:
-      - rabbitmq
-      - postgres
-    environment:
-      CELERY_BROKER_URL: amqp://arman:arman@rabbitmq_broker:5672/
-      CELERY_RESULT_BACKEND: db+postgresql://username:password@postgres_db:5432/real_estate
-    networks:
-      - real_estate_network
-    restart: always
-
 networks:
   real_estate_network:
     driver: bridge
