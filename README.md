@@ -70,7 +70,7 @@ python -m src.crawler.bayut
 
 4. Start the FastAPI server:
 ```bash
-uvicorn src.api.main:app --host 127.0.0.1 --port 8000 --reload
+python -m src.api.main
 ```
 
 ## Project Structure
