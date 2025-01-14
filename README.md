@@ -65,7 +65,7 @@ celery -A src.processor.celery_tasks worker --loglevel=info
 
 3. Run the scraper:
 ```bash
-python -m src.crawler.realestate_crawler.spiders.bayut
+python -m src.crawler.bayut
 ```
 
 4. Start the FastAPI server:
