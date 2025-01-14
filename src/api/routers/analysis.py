@@ -9,7 +9,6 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-# Initialize database connection
 DATABASE_URL = 'postgresql://username:password@localhost:5432/real_estate'
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
@@ -38,7 +37,6 @@ async def get_region_listings():
     finally:
         session.close()
 
-
 @router.get("/avg-price")
 async def get_avg_price():
     session = Session()
@@ -62,10 +60,8 @@ async def get_avg_price():
     finally:
         session.close()
 
-
 @router.get("/max_min_price")
 async def get_max_min():
-    """Calculate the maximum and minimum price of properties."""
     session = Session()
     try:
         max_price_per_region = session.query(
