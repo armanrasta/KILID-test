@@ -3,7 +3,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, StaleElementReferenceException, NoSuchElementException
+from selenium.common.exceptions import TimeoutException, StaleElementReferenceException, NoSuchElementException, WebDriverException
 from datetime import datetime
 import json
 from src.processor.celery_tasks import process_property_details
@@ -24,33 +24,38 @@ class BayutSeleniumScraper:
         options.add_experimental_option('excludeSwitches', ['enable-logging'])
         
         self.driver = webdriver.Chrome(options=options)
-        self.wait = WebDriverWait(self.driver, 30, poll_frequency=1) 
+        self.wait = WebDriverWait(self.driver, 30, poll_frequency=1)  # Increased timeout
         self.base_url = 'https://www.bayut.com/for-sale/property/dubai/?sort=date_desc'
 
     def scrape(self):
         try:
             self.driver.get(self.base_url)
             while True:
+                # Wait for listings to load
                 self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'ul li article')))
-                time.sleep(2)
+                time.sleep(2)  # Extra wait for dynamic content
 
+                # Get all property cards
                 property_cards = self.driver.find_elements(By.CSS_SELECTOR, 'ul li article')
                 
                 for card in property_cards:
                     try:
-                        
+                        # Get basic info from card
                         property_data = self._extract_card_info(card)
                         if property_data is None:
                             continue
                         
+                        # Get detail page URL
                         detail_url = card.find_element(By.CSS_SELECTOR, 'a').get_attribute('href')
                         
+                        # Visit detail page and get full info
                         self._get_property_details(detail_url, property_data)
                         
                     except Exception as e:
                         print(f"Error processing property card: {str(e)}")
                         continue
 
+                # Try to go to next page
                 try:
                     next_button = self.driver.find_element(By.CSS_SELECTOR, 'a[title="Next"]')
                     if not next_button.is_enabled():
@@ -66,9 +71,11 @@ class BayutSeleniumScraper:
     def _extract_card_info(self, card):
         """Extract information from the property card."""
         try:
+            # Get JSON-LD data
             script = card.find_element(By.CSS_SELECTOR, 'script[type="application/ld+json"]').get_attribute('innerHTML')
             data = json.loads(script)
             
+            # Map the fields to match the model's field names exactly
             return {
                 'property_id': data['url'].split('-')[-1].replace('.html', ''),
                 'property_type': data.get('@type'),
@@ -95,23 +102,27 @@ class BayutSeleniumScraper:
         
         while retry_count < max_retries:
             try:
+                # Open new tab and switch to it
                 self.driver.execute_script("window.open('');")
                 self.driver.switch_to.window(self.driver.window_handles[-1])
                 
                 print(f"\nProcessing URL: {url}")
                 self.driver.get(url)
                 
+                # Wait for the page to load completely
                 self.wait.until(
                     EC.presence_of_element_located((By.TAG_NAME, "body"))
                 )
-                time.sleep(5)
+                time.sleep(5)  # Additional wait for dynamic content
 
+                # Try different selectors to ensure the page is loaded
                 try:
+                    # Wait for any of these elements to be present
                     selectors = [
                         'ul[aria-label="Property details"]',
-                        'div._948d9e0a', 
-                        'h1.fcca24e0',
-                        'div[role="main"]' 
+                        'div._948d9e0a',  # Common class in property details
+                        'h1.fcca24e0',    # Property title
+                        'div[role="main"]' # Main content area
                     ]
                     
                     for selector in selectors:
@@ -130,8 +141,10 @@ class BayutSeleniumScraper:
                     retry_count += 1
                     continue
 
+                # Extract property details
                 details = {}
                 
+                # Get basic information
                 try:
                     details['title'] = self._safe_get_text(
                         self.driver.find_element(By.CSS_SELECTOR, 'h1.fcca24e0')
@@ -140,6 +153,7 @@ class BayutSeleniumScraper:
                 except:
                     print("Could not find title")
 
+                # Get price information
                 try:
                     price_element = self.driver.find_element(
                         By.CSS_SELECTOR, 'span[aria-label="Price"], span.fcca24e0'
@@ -149,19 +163,22 @@ class BayutSeleniumScraper:
                 except:
                     print("Could not find price")
 
+                # Update property data with what we found
                 property_data.update(details)
 
+                # Extract other information
                 self._extract_additional_details(property_data)
                 
                 print("\nFinal Property Data:")
                 print(json.dumps(property_data, indent=2))
                 
+                # Queue the data for processing
                 process_property_details.delay(property_data)
                 print(f"Queued property {property_data['property_id']}")
                 
-                break
+                break  # Success, exit retry loop
 
-            except Exception as e:
+            except WebDriverException as e:
                 print(f"Error processing property: {str(e)}")
                 retry_count += 1
                 time.sleep(2)
@@ -213,6 +230,7 @@ class BayutSeleniumScraper:
         """Extract all property details with proper error handling."""
         details = {}
         try:
+            # Extract all labeled fields
             labeled_fields = [
                 'Price', 'Beds', 'Baths', 'Area', 'Type', 'Purpose', 'Property reference',
                 'Completion status', 'Reactivated date', 'Handover date', 'Permit Number',
@@ -231,6 +249,7 @@ class BayutSeleniumScraper:
                 except:
                     pass
 
+            # Extract link information
             try:
                 links = self.driver.find_elements(By.CSS_SELECTOR, 'a[aria-label]')
                 for link in links:
@@ -241,6 +260,7 @@ class BayutSeleniumScraper:
             except:
                 pass
 
+            # Extract guide link title
             try:
                 guide_title = self.driver.find_element(
                     By.CSS_SELECTOR, 'div[aria-label="Guide link title"]'
@@ -361,11 +381,13 @@ class BayutSeleniumScraper:
     def _extract_additional_details(self, property_data):
         """Extract additional property details with better error handling."""
         try:
+            # Extract features/amenities
             features = self._extract_features(property_data)
             if features:
                 property_data['features'] = features
                 print(f"Found {sum(len(v) for v in features.values())} features in {len(features)} categories")
 
+            # Extract description
             try:
                 description_element = self.driver.find_element(
                     By.CSS_SELECTOR, 
@@ -378,6 +400,7 @@ class BayutSeleniumScraper:
                 print(f"Error extracting description: {str(e)}")
                 property_data['description'] = None
 
+            # Extract all spans with aria-labels
             elements = self.driver.find_elements(
                 By.CSS_SELECTOR, 
                 'span[aria-label], div[aria-label="Property details"] span'
